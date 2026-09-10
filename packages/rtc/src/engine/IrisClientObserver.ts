@@ -7,7 +7,7 @@ import {
   IrisTrackEventHandlerParam,
 } from '../event_handler/IrisTrackEventHandler';
 
-import { AgoraConsole } from '../util';
+import { AgoraConsole, getUidFromRemoteUser } from '../util';
 
 import { IrisClient } from './IrisClient';
 import {
@@ -328,31 +328,38 @@ export class IrisClientObserver {
     let enableVideo: boolean = this._engine.globalState.enabledVideo;
     if (enableVideo && needSubscribe && irisClient.agoraRTCClient) {
       let user = irisClient.agoraRTCClient.remoteUsers.find(
-        (item) => item.uid === userPackage.uid
+        (item) => getUidFromRemoteUser(item) === userPackage.uid
       );
       if (!user || !user.hasVideo) {
         return;
       }
-      await irisClient.agoraRTCClient.subscribe(user, 'video').then(() => {
+      try {
+        await irisClient.agoraRTCClient.subscribe(user, 'video');
         AgoraConsole.debug('onEventUserPublished subscribe video success');
         // setup video maybe called before subscribe, so we need to play video here too
         if (userPackage.element) {
-          this._engine.trackHelper.play(
-            user!.videoTrack!,
-            userPackage.element,
-            userPackage.videoPlayerConfig
-          );
+          const element = document.getElementById(userPackage.element);
+          if (element?.isConnected) {
+            this._engine.trackHelper.play(
+              user.videoTrack!,
+              element,
+              userPackage.videoPlayerConfig
+            );
+          }
         }
         let param: IrisTrackEventHandlerParam = {
           client: irisClient.agoraRTCClient,
-          remoteUser: user!,
-          track: user!.videoTrack!,
+          remoteUser: user,
+          track: user.videoTrack!,
           trackType: 'IRemoteVideoTrack',
           videoSourceType: userPackage.videoSourceType,
         };
         let trackEventHandler = new IrisTrackEventHandler(param, this._engine);
         this._engine.irisClientManager.addTrackEventHandler(trackEventHandler);
-      });
+      } catch (error) {
+        AgoraConsole.error(`subscribe video failed: ${error}`);
+        throw error;
+      }
     }
   }
   async subscribeAudioTrack(userPackage: RemoteUserPackage, force: boolean) {
@@ -368,24 +375,37 @@ export class IrisClientObserver {
     let enableAudio: boolean = this._engine.globalState.enabledAudio;
     if (enableAudio && needSubscribe && irisClient.agoraRTCClient) {
       let user = irisClient.agoraRTCClient.remoteUsers.find(
-        (item) => item.uid === userPackage.uid
+        (item) => getUidFromRemoteUser(item) === userPackage.uid
       );
       if (!user || !user.hasAudio) {
         return;
       }
-      await irisClient.agoraRTCClient.subscribe(user, 'audio').then(() => {
-        AgoraConsole.debug('onEventUserPublished subscribe audio success');
-        this._engine.trackHelper.play(user!.audioTrack!);
-        let param: IrisTrackEventHandlerParam = {
-          client: irisClient.agoraRTCClient,
-          remoteUser: user!,
-          track: user!.audioTrack!,
-          trackType: 'IRemoteTrack',
-          videoSourceType: userPackage.videoSourceType,
-        };
-        let trackEventHandler = new IrisTrackEventHandler(param, this._engine);
-        this._engine.irisClientManager.addTrackEventHandler(trackEventHandler);
-      });
+      await irisClient.agoraRTCClient
+        .subscribe(user, 'audio')
+        .then(async () => {
+          AgoraConsole.debug('onEventUserPublished subscribe audio success');
+          this._engine.trackHelper.play(user!.audioTrack!);
+          if (this._engine.globalState.playbackDeviceId) {
+            await this._engine.trackHelper.setPlaybackDevice(
+              user!.audioTrack!,
+              this._engine.globalState.playbackDeviceId
+            );
+          }
+          let param: IrisTrackEventHandlerParam = {
+            client: irisClient.agoraRTCClient,
+            remoteUser: user!,
+            track: user!.audioTrack!,
+            trackType: 'IRemoteTrack',
+            videoSourceType: userPackage.videoSourceType,
+          };
+          let trackEventHandler = new IrisTrackEventHandler(
+            param,
+            this._engine
+          );
+          this._engine.irisClientManager.addTrackEventHandler(
+            trackEventHandler
+          );
+        });
     }
   }
 
@@ -395,7 +415,7 @@ export class IrisClientObserver {
     );
     if (irisClient?.agoraRTCClient) {
       let user = irisClient.agoraRTCClient.remoteUsers.find(
-        (item) => item.uid === userPackage.uid
+        (item) => getUidFromRemoteUser(item) === userPackage.uid
       );
       if (!user || !user.videoTrack) {
         return;
@@ -416,7 +436,7 @@ export class IrisClientObserver {
     );
     if (irisClient?.agoraRTCClient) {
       let user = irisClient.agoraRTCClient.remoteUsers.find(
-        (item) => item.uid === userPackage.uid
+        (item) => getUidFromRemoteUser(item) === userPackage.uid
       );
       if (!user || !user.audioTrack) {
         return;

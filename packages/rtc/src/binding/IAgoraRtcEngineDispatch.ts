@@ -1253,10 +1253,25 @@ export class IRtcEngineEventHandler {
     height: number,
     rotation: number
   ): void {
-    AgoraConsole.warn(
-      'RtcEngineEventHandler_onVideoSizeChanged_99bf45c not supported in this platform!'
+    let _obj = {
+      connection,
+      sourceType,
+      uid,
+      width,
+      height,
+      rotation,
+    };
+    let _json = JSON.stringify(_obj);
+    let eventParam = new IrisCore.EventParam(
+      'RtcEngineEventHandler_onVideoSizeChanged_99bf45c',
+      _json,
+      0,
+      '',
+      [],
+      [],
+      0
     );
-    this._engine.returnResult(false, -ERROR_CODE_TYPE.ERR_NOT_SUPPORTED);
+    this.notifyEvent(eventParam);
   }
 
   onRemoteVideoStateChanged_a14e9d1(

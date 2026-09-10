@@ -36,6 +36,41 @@ export const RTCENGINE_KEY = 'RtcEngine';
 export class IRtcEngineImpl implements IRtcEngineExtensions {
   private _engine: IrisRtcEngine;
 
+  private _notifyFirstLocalVideoFrameAfterPlay(
+    track: ILocalVideoTrack,
+    sourceType: NATIVE_RTC.VIDEO_SOURCE_TYPE
+  ): void {
+    const maxAttempts = 60;
+    const retryDelayMillis = 50;
+    let attempts = 0;
+
+    const notifyWhenFrameIsAvailable = () => {
+      attempts += 1;
+      try {
+        // The Web SDK exposes rendered local-frame dimensions only after the
+        // preview is playing. This matches native first-local-frame semantics.
+        const frame = track.getCurrentFrameData();
+        if (frame?.width > 0 && frame.height > 0) {
+          this._engine.rtcEngineEventHandler.onFirstLocalVideoFrame_ebdfd19(
+            sourceType,
+            frame.width,
+            frame.height,
+            0
+          );
+          return;
+        }
+      } catch {
+        // The frame is not ready yet. Retry until the bounded timeout below.
+      }
+
+      if (attempts < maxAttempts) {
+        setTimeout(notifyWhenFrameIsAvailable, retryDelayMillis);
+      }
+    };
+
+    notifyWhenFrameIsAvailable();
+  }
+
   constructor(engine: IrisRtcEngine) {
     this._engine = engine;
   }
@@ -158,7 +193,9 @@ export class IRtcEngineImpl implements IRtcEngineExtensions {
             if (trackPackage.track) {
               let track = trackPackage.track as IMicrophoneAudioTrack;
               if (options.stopMicrophoneRecording) {
-                await this._engine.trackHelper.setMuted(track, true);
+                // setMuted only stops publication. Disabling also releases the
+                // browser microphone; joinChannel re-enables it before reuse.
+                await this._engine.trackHelper.setEnabled(track, false);
               }
             }
           }
@@ -353,6 +390,7 @@ export class IRtcEngineImpl implements IRtcEngineExtensions {
               videoTrackPackage.element,
               videoTrackPackage.videoPlayerConfig
             );
+            this._notifyFirstLocalVideoFrameAfterPlay(track, sourceType);
           }
         }
       } catch (err) {
@@ -482,6 +520,7 @@ export class IRtcEngineImpl implements IRtcEngineExtensions {
             trackPackage.element,
             trackPackage.videoPlayerConfig
           );
+          this._notifyFirstLocalVideoFrameAfterPlay(track, sourceType);
         }
       }
       return this._engine.returnResult();

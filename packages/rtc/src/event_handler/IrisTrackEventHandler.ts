@@ -16,7 +16,7 @@ import { BufferSourceAudioTrackPackage } from '../engine/IrisClientManager';
 
 import { IrisRtcEngine } from '../engine/IrisRtcEngine';
 
-import { CheckVideoVisibleResult } from '../web_sdk';
+import { getUidFromRemoteUser } from '../util';
 
 export type TrackType =
   | 'ILocalTrack'
@@ -48,7 +48,6 @@ export class IrisTrackEventHandler {
 
   private __onEventTrackEnded: Function;
   private __onEventFirstFrameDecoded = Function;
-  private __onEventVideoElementVisibleStatus = Function;
   private __onEventSourceStateChange = Function;
 
   constructor(params: IrisTrackEventHandlerParam, engine: IrisRtcEngine) {
@@ -66,13 +65,6 @@ export class IrisTrackEventHandler {
       case 'ILocalVideoTrack':
         this.__onEventTrackEnded = this.onEventTrackEnded.bind(this);
         this._track.on('track-ended', this.__onEventTrackEnded);
-        this.__onEventVideoElementVisibleStatus = this.onEventVideoElementVisibleStatus.bind(
-          this
-        );
-        this._track.on(
-          'video-element-visible-status',
-          this.__onEventVideoElementVisibleStatus
-        );
         break;
       case 'IRemoteTrack':
         this.__onEventFirstFrameDecoded = this.onEventFirstFrameDecoded.bind(
@@ -85,13 +77,6 @@ export class IrisTrackEventHandler {
           this
         );
         this._track.on('first-frame-decoded', this.__onEventFirstFrameDecoded);
-        this.__onEventVideoElementVisibleStatus = this.onEventVideoElementVisibleStatus.bind(
-          this
-        );
-        this._track.on(
-          'video-element-visible-status',
-          this.__onEventVideoElementVisibleStatus
-        );
         break;
       case 'IBufferSourceAudioTrack':
         this.__onEventSourceStateChange = this.onEventSourceStateChange.bind(
@@ -130,25 +115,21 @@ export class IrisTrackEventHandler {
     //目前没有找到对应的回调
   }
 
-  onEventVideoElementVisibleStatus(data?: CheckVideoVisibleResult): void {
-    this._engine.rtcEngineEventHandler.onFirstLocalVideoFrame_ebdfd19(
-      this._videoSourceType as NATIVE_RTC.VIDEO_SOURCE_TYPE,
-      0,
-      0,
-      0
-    );
-  }
-
   onEventFirstFrameDecoded() {
     if (!this._client) {
       return;
     }
+    const irisClient = this._engine.irisClientManager.irisClientList.find(
+      (item) => item.agoraRTCClient === this._client
+    );
+    const connection: NATIVE_RTC.RtcConnection = irisClient?.connection ?? {
+      channelId: this._client.channelName,
+      localUid: this._client.uid as number,
+    };
+    const remoteUid = this._remoteUser
+      ? getUidFromRemoteUser(this._remoteUser)
+      : -1;
     if (this._trackType == 'IRemoteTrack') {
-      let connection: NATIVE_RTC.RtcConnection = {
-        channelId: this._client.channelName,
-        localUid: this._client.uid as number,
-      };
-      let remoteUid = (this._remoteUser?.uid as number) || -1;
       let elapsed = 0;
       this._engine.rtcEngineEventHandler.onFirstRemoteAudioDecoded_c5499bd(
         connection,
@@ -161,11 +142,6 @@ export class IrisTrackEventHandler {
         elapsed
       );
     } else if (this._trackType == 'IRemoteVideoTrack') {
-      let connection: NATIVE_RTC.RtcConnection = {
-        channelId: this._client.channelName,
-        localUid: this._client.uid as number,
-      };
-      let remoteUid = (this._remoteUser?.uid as number) || -1;
       let elapsed = 0;
       let width = -1;
       let height = -1;
@@ -188,6 +164,16 @@ export class IrisTrackEventHandler {
         height,
         elapsed
       );
+      if (width > 0 && height > 0) {
+        this._engine.rtcEngineEventHandler.onVideoSizeChanged_99bf45c(
+          connection,
+          NATIVE_RTC.VIDEO_SOURCE_TYPE.VIDEO_SOURCE_REMOTE,
+          remoteUid,
+          width,
+          height,
+          0
+        );
+      }
     }
   }
 
@@ -210,20 +196,12 @@ export class IrisTrackEventHandler {
     } else if (this._trackType == 'ILocalVideoTrack') {
       let track = this._track as ILocalVideoTrack;
       track.off('track-ended', this.__onEventTrackEnded);
-      track.off(
-        'video-element-visible-status',
-        this.__onEventVideoElementVisibleStatus
-      );
     } else if (this._trackType == 'IRemoteTrack') {
       let track = this._track as IRemoteTrack;
       track.off('first-frame-decoded', this.__onEventFirstFrameDecoded);
     } else if (this._trackType == 'IRemoteVideoTrack') {
       let track = this._track as IRemoteVideoTrack;
       track.off('first-frame-decoded', this.__onEventFirstFrameDecoded);
-      track.off(
-        'video-element-visible-status',
-        this.__onEventVideoElementVisibleStatus
-      );
     }
   }
 }

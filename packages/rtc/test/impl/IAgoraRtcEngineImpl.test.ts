@@ -360,6 +360,10 @@ describe('IAgoraRtcEngineImpl', () => {
     let irisClient = irisRtcEngine.irisClientManager.getIrisClient();
     jest.spyOn(irisClient, 'release');
     await joinChannel(apiEnginePtr, null);
+    const microphoneTrack = irisClient.audioTrackPackages[0]
+      .track as ILocalTrack;
+    jest.spyOn(irisRtcEngine.trackHelper, 'setEnabled');
+    jest.spyOn(irisRtcEngine.trackHelper, 'setMuted');
     let agoraRTCClient = irisClient.agoraRTCClient;
     jest.spyOn(irisRtcEngine.rtcEngineEventHandler, 'onUserOffline_0a32aac');
     jest.spyOn(irisRtcEngine.rtcEngineEventHandler, 'onLeaveChannel_c8e730d');
@@ -378,6 +382,36 @@ describe('IAgoraRtcEngineImpl', () => {
     expect(irisClient.videoTrackPackage).toBeUndefined();
     expect(irisClient.agoraRTCClient).toBeUndefined();
     expect(irisClient.audioTrackPackages.length).toBe(0);
+    expect(irisRtcEngine.trackHelper.setEnabled).toHaveBeenCalledWith(
+      microphoneTrack,
+      false
+    );
+    expect(irisRtcEngine.trackHelper.setMuted).not.toHaveBeenCalledWith(
+      microphoneTrack,
+      true
+    );
+  });
+
+  test('re-enables a microphone track retained after leave before publishing it again', async () => {
+    await joinChannel(apiEnginePtr, null);
+    const irisClient = irisRtcEngine.irisClientManager.getIrisClient();
+    const microphoneTrack = irisClient.audioTrackPackages[0]
+      .track as ILocalTrack;
+    jest.spyOn(irisRtcEngine.trackHelper, 'setEnabled');
+
+    await callIris(apiEnginePtr, 'RtcEngine_leaveChannel_2c0e3aa', {
+      options: { stopMicrophoneRecording: true },
+    });
+    await joinChannel(apiEnginePtr, null);
+
+    expect(irisRtcEngine.trackHelper.setEnabled).toHaveBeenCalledWith(
+      microphoneTrack,
+      false
+    );
+    expect(irisRtcEngine.trackHelper.setEnabled).toHaveBeenCalledWith(
+      microphoneTrack,
+      true
+    );
   });
 
   test('enableLocalAudio_5039d15', async () => {

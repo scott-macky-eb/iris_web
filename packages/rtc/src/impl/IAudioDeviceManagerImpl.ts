@@ -1,9 +1,5 @@
 import * as NATIVE_RTC from '@iris/native-rtc';
-import {
-  ILocalAudioTrack,
-  IMicrophoneAudioTrack,
-  IRemoteAudioTrack,
-} from 'agora-rtc-sdk-ng';
+import { IMicrophoneAudioTrack, IRemoteAudioTrack } from 'agora-rtc-sdk-ng';
 import { CallApiReturnType } from 'iris-web-core';
 
 import { IrisAudioSourceType } from '../base/BaseType';
@@ -61,19 +57,11 @@ export class IAudioDeviceManagerImpl implements NATIVE_RTC.IAudioDeviceManager {
     let process = async () => {
       this._engine.globalState.playbackDeviceId = deviceId;
 
-      for (let audioTrackPackage of this._engine.irisClientManager
-        .localAudioTrackPackages) {
-        if (audioTrackPackage.track) {
-          if (
-            audioTrackPackage.type ==
-              IrisAudioSourceType.kAudioSourceTypeRemote ||
-            audioTrackPackage.type ==
-              IrisAudioSourceType.kAudioSourceTypeMicrophonePrimary ||
-            audioTrackPackage.type ==
-              IrisAudioSourceType.kAudioSourceTypeMicrophoneSecondary
-          ) {
+      for (let irisClient of this._engine.irisClientManager.irisClientList) {
+        for (let remoteUser of irisClient.agoraRTCClient?.remoteUsers ?? []) {
+          if (remoteUser.audioTrack) {
             await this._engine.trackHelper.setPlaybackDevice(
-              audioTrackPackage.track as ILocalAudioTrack | IRemoteAudioTrack,
+              remoteUser.audioTrack as IRemoteAudioTrack,
               deviceId
             );
           }
