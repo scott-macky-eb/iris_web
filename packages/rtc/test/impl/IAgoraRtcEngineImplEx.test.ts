@@ -183,6 +183,7 @@ describe('IAgoraRtcEngineImpl', () => {
         uid: TEST_REMOTE_UID,
         view: 'test-view',
         sourceType: NATIVE_RTC.VIDEO_SOURCE_TYPE.VIDEO_SOURCE_REMOTE,
+        renderMode: NATIVE_RTC.RENDER_MODE_TYPE.RENDER_MODE_FIT,
       },
       connection: connection,
     };
@@ -211,6 +212,10 @@ describe('IAgoraRtcEngineImpl', () => {
               expect(
                 irisRtcEngine.irisClientManager.remoteUserPackages[0].uid
               ).toBe(param2.canvas.uid);
+              expect(
+                irisRtcEngine.irisClientManager.remoteUserPackages[0]
+                  .videoPlayerConfig.fit
+              ).toBe('contain');
               expect(
                 irisRtcEngine.irisClientManager.remoteUserPackages[0].connection
                   .channelId

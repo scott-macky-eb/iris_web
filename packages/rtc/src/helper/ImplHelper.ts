@@ -562,11 +562,10 @@ export class ImplHelper {
       this._engine.globalState.enabledAudio &&
       options.publishMicrophoneTrack
     ) {
-      if (
-        !this._engine.irisClientManager.getLocalAudioTrackPackageBySourceType(
-          IrisAudioSourceType.kAudioSourceTypeMicrophonePrimary
-        )[0]
-      ) {
+      const microphoneTrackPackage = this._engine.irisClientManager.getLocalAudioTrackPackageBySourceType(
+        IrisAudioSourceType.kAudioSourceTypeMicrophonePrimary
+      )[0];
+      if (!microphoneTrackPackage) {
         let audioTrack = await this._engine.implHelper.createMicrophoneAudioTrack();
         this._engine.irisClientManager.addLocalAudioTrackPackage(
           new AudioTrackPackage(
@@ -576,6 +575,14 @@ export class ImplHelper {
         );
         await this._engine.trackHelper.setEnabled(
           audioTrack as ILocalAudioTrack,
+          true
+        );
+      } else {
+        // leaveChannel can disable this track to release the browser's
+        // microphone capture. A retained track must be re-enabled before it
+        // is published into a subsequent channel.
+        await this._engine.trackHelper.setEnabled(
+          microphoneTrackPackage.track as ILocalAudioTrack,
           true
         );
       }

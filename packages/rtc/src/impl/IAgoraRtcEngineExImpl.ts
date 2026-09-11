@@ -16,7 +16,12 @@ import { NotifyRemoteType, NotifyType } from '../engine/IrisClientObserver';
 
 import { IrisRtcEngine } from '../engine/IrisRtcEngine';
 import { SendDataStreamMessage } from '../helper/ClientHelper';
-import { AgoraConsole, AgoraTranslate, isDefined } from '../util';
+import {
+  AgoraConsole,
+  AgoraTranslate,
+  getUidFromRemoteUser,
+  isDefined,
+} from '../util';
 
 //@ts-ignore
 export class IRtcEngineExImpl implements NATIVE_RTC.IRtcEngineEx {
@@ -133,7 +138,9 @@ export class IRtcEngineExImpl implements NATIVE_RTC.IRtcEngineEx {
           if (trackPackage.track) {
             let track = trackPackage.track as IMicrophoneAudioTrack;
             if (options.stopMicrophoneRecording) {
-              await this._engine.trackHelper.setMuted(track, true);
+              // setMuted only stops publication. Disabling also releases the
+              // browser microphone; joinChannel re-enables it before reuse.
+              await this._engine.trackHelper.setEnabled(track, false);
             }
           }
         }
@@ -190,19 +197,29 @@ export class IRtcEngineExImpl implements NATIVE_RTC.IRtcEngineEx {
         );
         if (remoteUserPackage) {
           remoteUserPackage.element = canvas.view;
+          if (isDefined(canvas.renderMode)) {
+            remoteUserPackage.videoPlayerConfig.fit = AgoraTranslate.NATIVE_RTC_RENDER_MODE_TYPE2Fit(
+              canvas.renderMode
+            );
+          }
         }
-        let irisClient = this._engine.irisClientManager.getIrisClientByConnection(
-          connection
-        );
+        let irisClient = remoteUserPackage
+          ? this._engine.irisClientManager.getIrisClientByConnection(
+              remoteUserPackage.connection
+            )
+          : undefined;
         if (irisClient) {
           let remoteUser = irisClient.agoraRTCClient?.remoteUsers.find(
-            (user) => user.uid === canvas.uid
+            (user) => getUidFromRemoteUser(user) === canvas.uid
           );
           // subscribe video maybe called before setupVideo, so we need to play video here too
-          if (remoteUser && remoteUser.videoTrack) {
+          const element = remoteUserPackage
+            ? document.getElementById(remoteUserPackage.element)
+            : null;
+          if (element?.isConnected && remoteUser?.videoTrack) {
             this._engine.trackHelper.play(
               remoteUser.videoTrack!,
-              remoteUserPackage.element,
+              element,
               remoteUserPackage.videoPlayerConfig
             );
           }
@@ -407,20 +424,23 @@ export class IRtcEngineExImpl implements NATIVE_RTC.IRtcEngineEx {
     );
     if (remoteUserPackage) {
       let irisClient = this._engine.irisClientManager.getIrisClientByConnection(
-        connection
+        remoteUserPackage.connection
       );
       if (irisClient) {
         let user = irisClient.agoraRTCClient?.remoteUsers.find(
-          (item) => item.uid === remoteUserPackage!.uid
+          (item) => getUidFromRemoteUser(item) === remoteUserPackage!.uid
         );
         if (user && user.hasVideo) {
           remoteUserPackage.videoPlayerConfig = config;
           if (user.videoTrack) {
-            this._engine.trackHelper.play(
-              user.videoTrack,
-              remoteUserPackage.element,
-              remoteUserPackage.videoPlayerConfig
-            );
+            const element = document.getElementById(remoteUserPackage.element);
+            if (element?.isConnected) {
+              this._engine.trackHelper.play(
+                user.videoTrack,
+                element,
+                remoteUserPackage.videoPlayerConfig
+              );
+            }
           }
         }
       }

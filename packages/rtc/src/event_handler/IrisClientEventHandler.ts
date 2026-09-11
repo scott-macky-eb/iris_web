@@ -155,11 +155,8 @@ export class IrisClientEventHandler {
    *  2.主客户端A会触发 用户B加入(需要过滤掉这个值)
    *  3.子客户端B会触发 用户A加入(需要过滤点这个值)
    **/
-  onEventUserJoined(user: IAgoraRTCRemoteUser): void {
-    let connection: NATIVE_RTC.RtcConnection = {
-      channelId: this.agoraRTCClient.channelName,
-      localUid: this.agoraRTCClient.uid as number,
-    };
+  async onEventUserJoined(user: IAgoraRTCRemoteUser): Promise<void> {
+    let connection: NATIVE_RTC.RtcConnection = this._irisClient.connection;
     let remoteUid: number = getUidFromRemoteUser(user);
     let elapsed = 0;
     this._engine.rtcEngineEventHandler.onUserJoined_c5499bd(
@@ -181,11 +178,11 @@ export class IrisClientEventHandler {
       );
       this._engine.irisClientManager.addUserInfo(userInfo);
     }
-    let userPackage = this._engine.irisClientManager.getRemoteUserPackageByUid(
-      remoteUid
+    let userPackages = this._engine.irisClientManager.getRemoteUserPackagesByConnection(
+      connection
     );
-    if (!userPackage) {
-      userPackage = new RemoteUserPackage(
+    if (userPackages.length == 0) {
+      let userPackage = new RemoteUserPackage(
         connection,
         '',
         defaultRemoteVideoPlayerConfig,
@@ -198,7 +195,31 @@ export class IrisClientEventHandler {
         this.agoraRTCClient
       );
     } else {
-      userPackage.uid = remoteUid;
+      userPackages.forEach((userPackage) => {
+        userPackage.uid = remoteUid;
+      });
+    }
+    let remoteUser = this._engine.irisClientManager.getRemoteUserPackageByUid(
+      remoteUid
+    );
+    if (remoteUser) {
+      // The Web SDK can expose an already-published remote user without a
+      // subsequent user-published event. Subscribe here before reporting the
+      // stream as available to Flutter.
+      if (user.hasAudio) {
+        await this._engine.irisClientManager.irisClientObserver.notifyRemote(
+          NotifyRemoteType.SUBSCRIBE_AUDIO_TRACK,
+          [remoteUser],
+          false
+        );
+      }
+      if (user.hasVideo) {
+        await this._engine.irisClientManager.irisClientObserver.notifyRemote(
+          NotifyRemoteType.SUBSCRIBE_VIDEO_TRACK,
+          [remoteUser],
+          false
+        );
+      }
     }
     this._engine.rtcEngineEventHandler.onRemoteAudioStateChanged_056772e(
       this._irisClient.connection,

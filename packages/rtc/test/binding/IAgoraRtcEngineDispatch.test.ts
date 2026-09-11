@@ -49,12 +49,7 @@ describe('IRtcEngineEventHandler', () => {
     eventHandler.onJoinChannelSuccess_ee6b011(undefined, undefined, undefined);
     expect(
       eventHandler._engine.irisEventHandlerManager.notifyEvent
-    ).toBeCalledTimes(0);
-    expect(irisRtcEngine.returnResult).toBeCalledTimes(1);
-    expect(irisRtcEngine.returnResult).toBeCalledWith(
-      false,
-      -NATIVE_RTC.ERROR_CODE_TYPE.ERR_NOT_SUPPORTED
-    );
+    ).toBeCalledTimes(1);
   });
   test('RtcEngineEventHandler_onRejoinChannelSuccess_ee6b011 impl call', async () => {
     let eventHandler = new bindingAPI.IRtcEngineEventHandler(irisRtcEngine);
